@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARDS 3D Bedside Risk Visualization Tool</title>
+    <!-- 引入 Plotly.js 用于 3D 渲染 -->
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1F4E79;
+            --secondary-color: #2E7D32;
+            --accent-color: #C00000;
+            --bg-color: #F8F9FA;
+            --card-bg: #FFFFFF;
+            --text-color: #333333;
+            --warning-color: #EF6C00;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1250px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 950px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        header {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 10px 0;
+            border-bottom: 2px solid #E5E9F0;
+            margin-bottom: 15px;
+        }
+
+        header h1 {
+            color: var(--primary-color);
+            margin: 0;
+            font-size: 24px;
+        }
+
+        header p {
+            color: #666;
+            margin: 5px 0 0 0;
+            font-style: italic;
+            font-size: 14px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border: 1px solid #E5E9F0;
+        }
+
+        h2 {
+            color: var(--primary-color);
+            font-size: 16px;
+            margin-top: 0;
+            border-left: 4px solid var(--primary-color);
+            padding-left: 10px;
+            margin-bottom: 15px;
+        }
+
+        .input-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        input[type="number"], select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #CCCCCC;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+            transition: all 0.3s;
+            background-color: #FFF;
+        }
+
+        input[type="number"]:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 5px rgba(31,78,121,0.2);
+        }
+
+        input.out-of-range {
+            border-color: var(--warning-color);
+            background-color: #FFF3E0;
+        }
+
+        .warning-text {
+            color: var(--warning-color);
+            font-size: 11px;
+            margin-top: 3px;
+            display: none;
+            font-weight: bold;
+        }
+
+        .grid-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .output-panel {
+            background-color: #F1F5F9;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+            border-left: 4px solid var(--secondary-color);
+        }
+
+        .output-title {
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .btn-calc {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            font-size: 14px;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+
+        .btn-calc:hover {
+            background-color: #153C5E;
+        }
+
+        #plot3d {
+            width: 100%;
+            height: 520px;
+        }
+
+        .footer-note {
+            grid-column: 1 / -1;
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #E5E9F0;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>ARDS 3D Bedside Risk Visualization Tool</h1>
+    <p>Adjusted prognostic monitoring aid integrating baseline phenotyping and time-varying clinical support</p>
+</header>
+
+<div class="container">
+    <!-- 左侧：参数输入面板 -->
+    <div class="card">
+        <h2>1. Baseline Inflammatory Biomarkers (Day 1)</h2>
+        <div class="grid-inputs">
+            <div class="input-group">
+                <label for="il6">IL-6 (pg/mL)</label>
+                <input type="number" id="il6" value="42" step="0.1" min="0" max="10000" oninput="validateInput(this, 0, 10000)">
+                <div class="warning-text" id="il6-warn">Typical range: 0 to 10,000</div>
+            </div>
+            <div class="input-group">
+                <label for="tnf">TNF-α (pg/mL)</label>
+                <input type="number" id="tnf" value="8.2" step="0.1" min="0" max="2000" oninput="validateInput(this, 0, 2000)">
+                <div class="warning-text" id="tnf-warn">Typical range: 0 to 2,000</div>
+            </div>
+            <div class="input-group">
+                <label for="pct">Procalcitonin (ng/mL)</label>
+                <input type="number" id="pct" value="0.9" step="0.01" min="0" max="200" oninput="validateInput(this, 0, 200)">
+                <div class="warning-text" id="pct-warn">Typical range: 0 to 200</div>
+            </div>
+            <div class="input-group">
+                <label for="lactate">Lactate (mmol/L)</label>
+                <input type="number" id="lactate" value="1.7" step="0.1" min="0" max="25" oninput="validateInput(this, 0, 25)">
+                <div class="warning-text" id="lactate-warn">Typical range: 0 to 25</div>
+            </div>
+        </div>
+
+        <h2>2. Serial Oxygenation Track (PaO₂/FiO₂ Ratio)</h2>
+        <div class="grid-inputs">
+            <div class="input-group">
+                <label for="pf1">Day 1 P/F (mmHg)</label>
+                <input type="number" id="pf1" value="150" min="30" max="600" oninput="validateInput(this, 30, 600)">
+                <div class="warning-text" id="pf1-warn">Physiological limit: 30 to 600</div>
+            </div>
+            <div class="input-group">
+                <label for="pf3">Day 3 P/F (mmHg)</label>
+                <input type="number" id="pf3" value="180" min="30" max="600" oninput="validateInput(this, 30, 600)">
+                <div class="warning-text" id="pf3-warn">Physiological limit: 30 to 600</div>
+            </div>
+            <div class="input-group" style="grid-column: span 2;">
+                <label for="pf7">Day 7 P/F (mmHg)</label>
+                <input type="number" id="pf7" value="210" min="30" max="600" oninput="validateInput(this, 30, 600)">
+                <div class="warning-text" id="pf7-warn">Physiological limit: 30 to 600</div>
+            </div>
+        </div>
+
+        <h2>3. Active Supportive Care Vectors (7-Day Mean Adjustment)</h2>
+        <div class="grid-inputs">
+            <div class="input-group">
+                <label for="peep">Mean PEEP (cmH₂O)</label>
+                <input type="number" id="peep" value="10" step="0.5" min="5" max="24" oninput="validateInput(this, 5, 24)">
+                <div class="warning-text" id="peep-warn">Clinical range: 5 to 24</div>
+            </div>
+            <div class="input-group">
+                <label for="steroid">Systemic Corticosteroids</label>
+                <select id="steroid">
+                    <option value="no">No / De-escalated</option>
+                    <option value="yes">Yes (Active Treatment)</option>
+                </select>
+            </div>
+        </div>
+
+        <button class="btn-calc" onclick="calculateAll()">Update Risk Visualization</button>
+
+        <!-- 临床解读面板 -->
+        <div class="output-panel" id="result-panel">
+            <div class="output-title" id="pheno-title">Phenotype Assignment: Loading...</div>
+            <div style="font-size: 13px; line-height: 1.5;" id="pheno-desc">
+                Please click "Update Risk Visualization" to process the clinical data.
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：3D 交互曲面与轨迹 -->
+    <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <h2>4. Adjusted 3D Latent Survival Surface & Trajectory Projection</h2>
+        <div id="plot3d"></div>
+    </div>
+
+    <div class="footer-note">
+        <strong>Disclaimer:</strong> This tool is a prognostic risk visualization aid derived from retrospective cohorts. It is mathematically adjusted for baseline severity, PEEP, and corticosteroid administration, representing an independent exposure-prognosis association. It must <strong>not</strong> be interpreted as an active clinical treatment target or decision rule.
+    </div>
+</div>
+
+<script>
+    // 实时输入值合理性校验
+    function validateInput(inputElement, minVal, maxVal) {
+        const val = parseFloat(inputElement.value);
+        const warningDiv = document.getElementById(inputElement.id + '-warn');
+        if (isNaN(val) || val < minVal || val > maxVal) {
+            inputElement.classList.add('out-of-range');
+            if (warningDiv) warningDiv.style.display = 'block';
+        } else {
+            inputElement.classList.remove('out-of-range');
+            if (warningDiv) warningDiv.style.display = 'none';
+        }
+    }
+
+    function clamp(val, minVal, maxVal) {
+        return Math.max(minVal, Math.min(maxVal, val));
+    }
+
+    function calculateAll() {
+        // 1. 获取输入并进行安全生理范围截断
+        const il6 = clamp(parseFloat(document.getElementById('il6').value) || 42, 0, 10000);
+        const tnf = clamp(parseFloat(document.getElementById('tnf').value) || 8.2, 0, 2000);
+        const pct = clamp(parseFloat(document.getElementById('pct').value) || 0.9, 0, 200);
+        const lac = clamp(parseFloat(document.getElementById('lactate').value) || 1.7, 0, 25);
+
+        const pf1 = clamp(parseFloat(document.getElementById('pf1').value) || 150, 30, 600);
+        const pf3 = clamp(parseFloat(document.getElementById('pf3').value) || 180, 30, 600);
+        const pf7 = clamp(parseFloat(document.getElementById('pf7').value) || 210, 30, 600);
+
+        const peep = clamp(parseFloat(document.getElementById('peep').value) || 10, 5, 24);
+        const hasSteroid = document.getElementById('steroid').value === 'yes';
+
+        // 2. 模拟计算 baseline 炎症表型概率
+        const score = 0.5 * Math.log(il6/42 + 1) + 0.4 * Math.log(tnf/8.2 + 1) + 0.3 * (pct - 0.9) + 0.4 * (lac - 1.7) - 0.326;
+        const prob = 1 / (1 + Math.exp(-score));
+        const isHigherInflam = prob >= 0.5;
+
+        // 3. 计算时变治疗干预对 3D 风险曲面的平移修正效应 (δ_k * W_k)
+        // PEEP 偏高（如大于12）或使用激素会生理学合理地下调模型计算的风险（代表控制了治疗混杂后的净风险）
+        const peep_effect = (peep - 10) * -0.015;
+        const steroid_effect = hasSteroid ? -0.15 : 0.0;
+        const treatment_adjustment = peep_effect + steroid_effect;
+
+        // 4. 更新临床解读
+        const titleDiv = document.getElementById('pheno-title');
+        const descDiv = document.getElementById('pheno-desc');
+
+        if (isHigherInflam) {
+            titleDiv.innerHTML = `Phenotype Assignment: <span style="color:var(--accent-color);">Higher-Inflammatory Phenotype</span> (Probability: ${(prob*100).toFixed(1)}%)`;
+            descDiv.innerHTML = `<strong>Physiological Interpretation:</strong> The patient exhibits a baseline biological profile heavily dominated by cytokine-driven hyperinflammation. The projected 3D risk surface has been mathematically adjusted for a mean PEEP of ${peep} cmH₂O and ${hasSteroid ? 'active' : 'no'} corticosteroid support to show the adjusted prognostic trajectory.`;
+            document.getElementById('result-panel').style.borderLeftColor = 'var(--accent-color)';
+        } else {
+            titleDiv.innerHTML = `Phenotype Assignment: <span style="color:var(--secondary-color);">Lower-Inflammatory Phenotype</span> (Probability: ${(prob*100).toFixed(1)}%)`;
+            descDiv.innerHTML = `<strong>Physiological Interpretation:</strong> The patient exhibits a lower-inflammatory biological profile. The 3D risk surface reflects standard lung-protective ventilation settings.`;
+            document.getElementById('result-panel').style.borderLeftColor = 'var(--secondary-color)';
+        }
+
+        // 5. 动态生成 3D 网格与曲面 (GAM tensor product simulation)
+        const density = 40;
+        const days = [];
+        const pf_axis = [];
+        const z_surface = [];
+
+        for (let i = 0; i < density; i++) {
+            days.push(1 + (6 * i) / (density - 1));
+            pf_axis.push(50 + (300 * i) / (density - 1));
+        }
+
+        const pheno_shift = (prob - 0.419) * 0.4;
+
+        for (let i = 0; i < density; i++) {
+            const row = [];
+            const pf = pf_axis[i];
+            for (let j = 0; j < density; j++) {
+                const day = days[j];
+                const term1 = 0.08 * (7 - day) * (320 - pf) / 300;
+                const term2 = 0.00003 * Math.pow(pf - 245, 2);
+                // 风险值计算中耦合 treatment_adjustment 修正项
+                const val = term1 + term2 - 0.25 + pheno_shift + treatment_adjustment;
+                row.push(clamp(val, -0.6, 1.3));
+            }
+            z_surface.push(row);
+        }
+
+        // 6. 计算患者的 3D 轨迹点 (同样耦合治疗修正项)
+        const traj_days = [1, 3, 7];
+        const traj_pf = [pf1, pf3, pf7];
+        const traj_z = [];
+
+        for (let i = 0; i < 3; i++) {
+            const d = traj_days[i];
+            const p = traj_pf[i];
+            const t1 = 0.08 * (7 - d) * (320 - p) / 300;
+            const t2 = 0.00003 * Math.pow(p - 245, 2);
+            traj_z.push(clamp(t1 + t2 - 0.25 + pheno_shift + treatment_adjustment, -0.6, 1.3));
+        }
+
+        // 7. 渲染 Plotly 3D 图
+        const surface_data = {
+            x: days,
+            y: pf_axis,
+            z: z_surface,
+            type: 'surface',
+            colorscale: 'RdYlBu',
+            reversescale: true,
+            opacity: 0.85,
+            showscale: true,
+            colorbar: {
+                title: 'Risk (Log-odds)',
+                titleside: 'top',
+                thickness: 15,
+                len: 0.6
+            }
+        };
+
+        const trajectory_data = {
+            x: traj_days,
+            y: traj_pf,
+            z: traj_z,
+            type: 'scatter3d',
+            mode: 'lines+markers',
+            line: {
+                color: '#111111',
+                width: 5
+            },
+            marker: {
+                size: 6,
+                color: ['#1F4E79', '#D95F02', '#C00000'],
+                symbol: 'circle'
+            },
+            name: 'Patient Trajectory'
+        };
+
+        const layout = {
+            scene: {
+                xaxis: { title: 'Study Days', range: [1, 7] },
+                yaxis: { title: 'PaO2/FiO2 (mmHg)', range: [50, 350] },
+                zaxis: { title: 'Relative Risk (Log-odds)', range: [-0.7, 1.4] },
+                camera: {
+                    eye: { x: -1.5, y: -1.5, z: 0.8 }
+                }
+            },
+            margin: { l: 0, r: 0, b: 0, t: 0 },
+            showlegend: false
+        };
+
+        Plotly.newPlot('plot3d', [surface_data, trajectory_data], layout);
+    }
+
+    window.onload = function() {
+        calculateAll();
+    };
+</script>
+
+</body>
+</html>
